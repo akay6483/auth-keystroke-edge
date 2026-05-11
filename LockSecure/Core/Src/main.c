@@ -77,6 +77,7 @@ void SystemClock_Config(void);
 
 #define EEPROM_ADDR 0xA0
 #define PASS_MEM_ADDR 0x0000
+#define MAGIC_BYTE 0x5A
 
 #define SYSTEM_SALT "fP#fSDYi047UD9"
 
@@ -85,8 +86,16 @@ uint8_t input_hash[32];
 char salted_buffer[64];
 
 void save_hash(uint8_t* new_hash) {
-    HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, PASS_MEM_ADDR, I2C_MEMADD_SIZE_16BIT, new_hash, 32, 100);
-    HAL_Delay(5);
+    uint8_t buffer[33];
+    buffer[0] = MAGIC_BYTE;
+    memcpy(&buffer[1], new_hash, 32);
+
+    HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, PASS_MEM_ADDR, I2C_MEMADD_SIZE_16BIT, buffer, 33, 100);
+    HAL_Delay(10);
+}
+
+void load_eeprom(uint8_t* buffer) {
+    HAL_I2C_Mem_Read(&hi2c1, EEPROM_ADDR, PASS_MEM_ADDR, I2C_MEMADD_SIZE_16BIT, buffer, 33, 100);
 }
 
 void load_hash(uint8_t* hash_buf) {
@@ -180,9 +189,11 @@ int main(void)
   //lcd_send_string("System Ready");
   //HAL_Delay(1000);
 
-  load_hash(current_hash);
+  uint8_t eeprom_buffer[33];
+    load_eeprom(eeprom_buffer);
 
-  if (current_hash[0] == 0xFF || current_hash[0] == 0x00) {
+    // Check the Magic Byte
+    if (eeprom_buffer[0] != MAGIC_BYTE) {
         printf("EEPROM Blank/Corrupt. Initiating Factory Reset...\r\n");
 
         // 1. Generate the hash for the default PIN "1234"
@@ -193,15 +204,21 @@ int main(void)
         sha256_update(&ctx, (uint8_t*)salted_buffer, strlen(salted_buffer));
         sha256_final(&ctx, current_hash);
 
-        // 2. Save the newly generated hash to the EEPROM
+        // 2. Save the Magic Byte + Hash to the EEPROM
         save_hash(current_hash);
 
         printf("Factory Reset Complete: Default PW set to 1234\r\n");
     } else {
+        // Magic Byte matched! Safely extract the 32-byte hash
+        memcpy(current_hash, &eeprom_buffer[1], 32);
         printf("Boot: Password Hash loaded from EEPROM.\r\n");
     }
 
+    // Ensure the door is physically locked and alarm is off on boot
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+
+    printf("\r\n--- SYSTEM LOCKED ---\r\nEnter 4-digit code:\r\n");
 
     printf("\r\n--- SYSTEM LOCKED ---\r\nEnter 4-digit code:\r\n");
 
@@ -251,7 +268,12 @@ int main(void)
 	        	            	                    } else {
 	        	            	                        lcd_send_string("ACCESS DENIED");
 	        	            	                        printf("\r\nACCESS DENIED!\r\n");
+
+	        	            	                        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+
 	        	            	                        HAL_Delay(1500);
+
+	        	            	                        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
 
 	        	            	                        lcd_clear();
 	        	            	                        lcd_send_string("Enter Password:");
