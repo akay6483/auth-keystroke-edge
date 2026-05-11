@@ -1,0 +1,16 @@
+# STM32CubeIDE Build Folders
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.hex
+*.map
+
+# Proteus Temporary & Backup Files
+Backup Of *.pdsprj
+*.Workspace
+Last Loaded *.pdsprj
+
+# Virtual EEPROM Data (Let the code generate a fresh one for each user)
+eeprom.bin
