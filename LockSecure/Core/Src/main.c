@@ -90,8 +90,11 @@ void save_hash(uint8_t* new_hash) {
     buffer[0] = MAGIC_BYTE;
     memcpy(&buffer[1], new_hash, 32);
 
-    HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, PASS_MEM_ADDR, I2C_MEMADD_SIZE_16BIT, buffer, 33, 100);
-    HAL_Delay(10);
+    // Spoon-feed the EEPROM to prevent Page Wrapping
+    for(int i = 0; i < 33; i++) {
+            HAL_I2C_Mem_Write(&hi2c1, EEPROM_ADDR, PASS_MEM_ADDR + i, I2C_MEMADD_SIZE_16BIT, &buffer[i], 1, 100);
+            HAL_Delay(10); // Changed from 5 to 10 to safely beat the 6ms Proteus limit!
+    }
 }
 
 void load_eeprom(uint8_t* buffer) {
